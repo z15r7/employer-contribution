@@ -3,17 +3,25 @@
     <div class="layout">
       <div class="history">
         <div v-for="(entry, index) in history" :key="index" class="history-entry">
-          {{ entry }}
+          {{ entry }} <!-- 顯示計算歷史記錄 -->
+        </div>
+        <div class="stack">
+          <strong>Stack:</strong>
+          <div v-for="(item, index) in stack" :key="index" class="stack-item">
+            {{ item }} <!-- 顯示計算堆疊 -->
+          </div>
         </div>
       </div>
       <div class="main">
         <div class="display">
-          <div class="operation">{{ formattedOperation }}</div>
-          <div class="result">{{ formattedInput }}</div>
+          <div class="operation">{{ formattedOperation }}</div> <!-- 顯示格式化後的運算符 -->
+          <div class="result">{{ formattedInput }}</div> <!-- 顯示格式化後的輸入數字 -->
+          <div class="current-input">currentInput: {{ currentInput }}</div> <!-- 顯示當前輸入的數字 -->
+          <div class="current-operation">currentOperation: {{ currentOperation }}</div> <!-- 顯示當前輸入的數字 -->
         </div>
         <div class="keyboard">
           <button v-for="key in keys" :key="key" @click="handleKeyPress(key)" :class="{ active: key === activeKey }">
-            {{ key === '/' ? '÷' : key === '*' ? '×' : key }}
+            {{ key === '/' ? '÷' : key === '*' ? '×' : key }} <!-- 顯示鍵盤按鍵，替換顯示除號和乘號 -->
           </button>
         </div>
       </div>
@@ -22,31 +30,23 @@
 </template>
 
 <script lang="ts">
-// 引入 Vue 的相關功能模組
 import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
 
-// 定義並導出 Vue 組件
 export default defineComponent({
   setup() {
-    // 用於存儲當前輸入的數字，初始化為 '0'
-    const currentInput = ref('0');
-    // 用於存儲當前的運算式
-    const currentOperation = ref('');
-    // 用於記錄當前激活的按鍵
-    const activeKey = ref('');
-    // 用於判斷結果是否已顯示
-    const resultDisplayed = ref(false);
-    // 用於存儲歷史計算記錄
-    const history = ref<string[]>([]);
-    // 定義按鍵的數組
+    const currentInput = ref('0'); // 當前輸入的數字
+    const currentOperation = ref(''); // 當前的運算符
+    const activeKey = ref(''); // 當前按下的按鍵
+    const resultDisplayed = ref(false); // 是否顯示結果
+    const history = ref<string[]>([]); // 計算歷史記錄
     const keys = [
       '7', '8', '9', '/',
       '4', '5', '6', '*',
       '1', '2', '3', '-',
       '0', '.', 'C', '+',
       '='
-    ];
-    // 鍵盤輸入映射表
+    ]; // 鍵盤按鍵
+    const stack = ref<string[]>([]); // 用於計算的堆疊
     const keyMap: { [key: string]: string } = {
       '7': '7', '8': '8', '9': '9', '/': '/',
       '4': '4', '5': '5', '6': '6', '*': '*',
@@ -55,197 +55,133 @@ export default defineComponent({
       'C': 'C',
       'Enter': '=',
       'Delete': 'C'
-    };
+    }; // 鍵盤按鍵映射
 
-    // 格式化輸入數值為帶千分位的形式
     const formattedInput = computed(() => {
       if (!currentInput.value || currentInput.value === 'Error') {
-        return currentInput.value;
+        return currentInput.value; // 如果當前輸入為空或錯誤，直接返回
       }
-      const parsedValue = parseFloat(currentInput.value.replace(/,/g, ''));
-      return parsedValue.toLocaleString('en', { maximumFractionDigits: 20 });
-    });
+      const parsedValue = parseFloat(currentInput.value.replace(/,/g, '')); // 解析輸入的數字，去除逗號
+      return parsedValue.toLocaleString('en', { maximumFractionDigits: 20 }); // 格式化數字，最多顯示20位小數
+    }); // 格式化輸入的數字
 
-    // 格式化運算式，將運算符替換為顯示用符號
     const formattedOperation = computed(() => {
-      return currentOperation.value.replace(/\*/g, '×').replace(/\//g, '÷');
-    });
+      return currentOperation.value.replace(/\*/g, '×').replace(/\//g, '÷'); // 替換運算符顯示
+    }); // 格式化運算符
 
-    // 用於存儲操作數和操作符的棧
-    const stack = ref<string[]>([]);
-
-    // 處理按鍵事件
     const handleKeyPress = (key: string): void => {
-      activeKey.value = key; // 設置當前按鍵為激活狀態
-      setTimeout(() => (activeKey.value = ''), 200); // 200ms後取消激活狀態
+      activeKey.value = key; // 設置當前按下的按鍵
+      setTimeout(() => (activeKey.value = ''), 200); // 200毫秒後清除按鍵狀態
 
-      // 根據按鍵類型執行不同操作
       switch (key) {
         case '+':
         case '-':
         case '*':
         case '/':
-          handleOperator(key);
+          handleOperator(key); // 處理運算符按鍵
           break;
         case '=':
-          handleEquals();
+          handleEquals(); // 處理等號按鍵
           break;
         case 'C':
-          handleClear();
+          handleClear(); // 處理清除按鍵
           break;
         default:
-          handleNumber(key);
+          handleNumber(key); // 處理數字按鍵
       }
-    };
+    }; // 處理按鍵按下事件
 
-    // 處理運算符按鍵
-    const handleOperator = (operator: string): void => {
-      if (currentInput.value !== '') { // 如果當前有輸入數值
-        if (stack.value.length === 0) { // 如果棧為空，直接存入數值
-          stack.value.push(currentInput.value);
-          currentOperation.value = currentInput.value + operator;
-        } else { // 如果棧不為空，計算當前棧的結果
-          stack.value.push(currentInput.value);
-          const result = evaluateStack(stack.value);
-          currentInput.value = result.toString();
-          currentOperation.value += currentInput.value + operator;
-          stack.value = [result.toString(), operator]; // 將結果和運算符存入棧
-        }
-        currentInput.value = '0'; // 重置輸入區
+    const handleNumber = (number: string): void => {
+      if (resultDisplayed.value) {
+        currentInput.value = number; // 如果結果已顯示，重置當前輸入
+        resultDisplayed.value = false; // 設置結果未顯示
       } else {
-        if (stack.value.length > 0) { // 如果當前無輸入，更新運算符
-          stack.value[stack.value.length - 1] = operator;
-          currentOperation.value = currentOperation.value.slice(0, -1) + operator;
+        if (currentInput.value === '0' && number !== '.') {
+          currentInput.value = number; // 如果當前輸入為0且輸入的不是小數點，重置當前輸入
+        } else {
+          currentInput.value += number; // 否則，將數字添加到當前輸入
         }
+      }
+    }; // 處理數字按鍵
+
+    const handleOperator = (operator: string): void => {
+      if (currentInput.value !== '') {
+        stack.value.push(currentInput.value); // 將當前輸入的數字推入堆疊
+        stack.value.push(operator); // 將運算符推入堆疊
+        currentOperation.value += currentInput.value + operator; // 更新當前運算符
+        currentInput.value = '0'; // 重置當前輸入
       }
       resultDisplayed.value = false; // 設置結果未顯示
-    };
+    }; // 處理運算符按鍵
 
-    // 處理等於按鍵
     const handleEquals = (): void => {
-      if (currentInput.value !== '') { // 如果當前有輸入，存入棧
-        stack.value.push(currentInput.value);
-      }
-      if (['+', '-', '*', '/'].includes(stack.value[stack.value.length - 1])) {
-        stack.value.pop(); // 如果最後一個是運算符，刪除
+      if (currentInput.value !== '') {
+        stack.value.push(currentInput.value); // 將當前輸入的數字推入堆疊
       }
       try {
-        const result = evaluateStack(stack.value); // 計算結果
-        history.value.push(`${currentOperation.value}${currentInput.value} = ${result}`); // 存入歷史
-        currentInput.value = result.toString(); // 更新輸入區為結果
-        currentOperation.value = ''; // 清空運算區
-        stack.value = []; // 清空棧
+        const result = evaluateStack(stack.value); // 計算堆疊中的表達式
+        history.value.push(`${currentOperation.value}${currentInput.value} = ${result}`); // 將計算結果添加到歷史記錄
+        currentInput.value = result.toString(); // 顯示計算結果
+        currentOperation.value = ''; // 重置當前運算符
+        stack.value = []; // 清空堆疊
         resultDisplayed.value = true; // 設置結果已顯示
       } catch (error) {
-        currentInput.value = 'Error';
-        currentOperation.value = '';
-        stack.value = [];
-        resultDisplayed.value = false;
+        currentInput.value = 'Error'; // 顯示錯誤
+        currentOperation.value = ''; // 重置當前運算符
+        stack.value = []; // 清空堆疊
+        resultDisplayed.value = false; // 設置結果未顯示
       }
-    };
+    }; // 處理等號按鍵
 
-    // 處理清除按鍵
     const handleClear = (): void => {
-      currentInput.value = '0';
-      currentOperation.value = '';
-      stack.value = [];
-      resultDisplayed.value = false;
-    };
+      currentInput.value = '0'; // 重置當前輸入
+      currentOperation.value = ''; // 重置當前運算符
+      stack.value = []; // 清空堆疊
+      resultDisplayed.value = false; // 設置結果未顯示
+    }; // 處理清除按鍵
 
-    // 處理數字按鍵
-    const handleNumber = (number: string): void => {
-      if (resultDisplayed.value) { // 如果結果已顯示，重置輸入區
-        currentInput.value = number;
-        resultDisplayed.value = false;
-      } else {
-        if (currentInput.value === 'Error') {
-          currentInput.value = ''; // 清空輸入區
-          currentOperation.value = ''; 
-        }
-        if (currentInput.value === '0' && number !== '.') {
-          currentInput.value = number; // 替換初始 0
-        } else {
-          currentInput.value += number; // 拼接數字
-        }
-      }
-    };
-
-    // 處理鍵盤輸入
-    const handleKeyboardInput = (event: KeyboardEvent): void => {
-      const key = keyMap[event.key];
-      if (key) {
-        handleKeyPress(key);
-      }
-    };
-
-    // 計算棧內表達式的結果
     const evaluateStack = (stack: string[]): number => {
-      const outputQueue: string[] = []; // 後綴表表達式
-      const operatorStack: string[] = []; // 運算符棧
-      const precedence: { [key: string]: number } = {
-        '+': 1,
-        '-': 1,
-        '*': 2,
-        '/': 2
-      };
-
-      // 將中綴表表達式轉為後綴表
+      const resultStack: number[] = [];
       stack.forEach(token => {
         if (!isNaN(parseFloat(token))) {
-          outputQueue.push(token);
-        } else if (['+', '-', '*', '/'].includes(token)) {
-          while (
-            operatorStack.length &&
-            precedence[operatorStack[operatorStack.length - 1]] >= precedence[token]
-          ) {
-            outputQueue.push(operatorStack.pop()!);
-          }
-          operatorStack.push(token);
-        }
-      });
-
-      while (operatorStack.length) {
-        outputQueue.push(operatorStack.pop()!);
-      }
-
-      const resultStack: number[] = []; // 用於計算後綴表結果
-      outputQueue.forEach(token => {
-        if (!isNaN(parseFloat(token))) {
-          resultStack.push(parseFloat(token));
+          resultStack.push(parseFloat(token)); // 如果是數字，推入結果堆疊
         } else {
-          const b = resultStack.pop()!;
+          const b = resultStack.pop()!; // 彈出結果堆疊中的兩個數字
           const a = resultStack.pop()!;
           switch (token) {
             case '+':
-              resultStack.push(a + b);
+              resultStack.push(a + b); // 加法
               break;
             case '-':
-              resultStack.push(a - b);
+              resultStack.push(a - b); // 減法
               break;
             case '*':
-              resultStack.push(a * b);
+              resultStack.push(a * b); // 乘法
               break;
             case '/':
-              resultStack.push(a / b);
+              resultStack.push(a / b); // 除法
               break;
           }
         }
       });
+      return resultStack[0]; // 返回計算結果
+    }; // 計算堆疊中的表達式
 
-      return resultStack[0]; // 返回最終結果
+    onMounted(() => {
+      window.addEventListener('keydown', handleKeyboardInput); // 組件掛載時添加鍵盤事件監聽
+    });
+
+    onUnmounted(() => {
+      window.removeEventListener('keydown', handleKeyboardInput); // 組件卸載時移除鍵盤事件監聽
+    });
+
+    const handleKeyboardInput = (event: KeyboardEvent): void => {
+      const key = keyMap[event.key];
+      if (key) {
+        handleKeyPress(key); // 處理鍵盤輸入事件
+      }
     };
 
-    // 註冊鍵盤事件監聽器
-    onMounted(() => {
-      window.addEventListener('keydown', handleKeyboardInput);
-    });
-
-    // 移除鍵盤事件監聽器
-    onUnmounted(() => {
-      window.removeEventListener('keydown', handleKeyboardInput);
-    });
-
-    // 返回響應式數據和方法
     return {
       currentInput,
       currentOperation,
@@ -258,8 +194,9 @@ export default defineComponent({
       handleEquals,
       handleClear,
       handleNumber,
-      history
-    };
+      history,
+      stack
+    }; // 返回組件中使用的變量和方法
   }
 });
 </script>
@@ -277,10 +214,14 @@ export default defineComponent({
   flex-direction: row;
 }
 
+/* 計算器的樣式 */
+
 .layout {
   display: flex;
   width: 100%;
 }
+
+/* 布局樣式 */
 
 .history {
   width: 150px;
@@ -292,6 +233,8 @@ export default defineComponent({
   border-radius: 5px;
 }
 
+/* 歷史記錄區域的樣式 */
+
 .history-entry {
   font-size: 14px;
   color: #555;
@@ -299,11 +242,31 @@ export default defineComponent({
   text-align: left;
 }
 
+/* 歷史記錄條目的樣式 */
+
+.stack {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #333;
+}
+
+/* 堆疊區域的樣式 */
+
+.stack-item {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+/* 堆疊條目的樣式 */
+
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
+
+/* 主區域的樣式 */
 
 .display {
   margin-bottom: 10px;
@@ -320,10 +283,14 @@ export default defineComponent({
   justify-content: space-between;
 }
 
+/* 顯示區域的樣式 */
+
 .display .operation {
   font-size: 14px;
   color: #888;
 }
+
+/* 顯示區域中運算符的樣式 */
 
 .display .result {
   font-size: 18px;
@@ -331,11 +298,15 @@ export default defineComponent({
   color: #000;
 }
 
+/* 顯示區域中結果的樣式 */
+
 .keyboard {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
+
+/* 鍵盤區域的樣式 */
 
 button {
   padding: 10px;
@@ -348,11 +319,17 @@ button {
   transition: background 0.2s;
 }
 
+/* 按鈕的樣式 */
+
 button.active {
   background: #0056b3;
 }
 
+/* 按鈕被按下時的樣式 */
+
 button:hover {
   background: #0056b3;
 }
+
+/* 按鈕懸停時的樣式 */
 </style>
