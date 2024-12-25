@@ -17,7 +17,7 @@
       </button>
     </div>
 
-    <button class="edit-button" @click="openEmployerBurdenTable">編輯雇主負擔</button>
+    <button class="edit-button" @click="openEmployerContributionTable">編輯雇主負擔</button>
   </div>
 </template>
 
@@ -32,9 +32,9 @@ export default {
     const mode = ref('salary')
     const salary = ref(null)
     const months = ref(null)
-    const employerBurden = ref(0)
+    const employerContribution = ref(0)
     const display = ref('請輸入薪資金額')
-    const burdenData = ref([])
+    const ContributionData = ref([])
     const error = ref(null)
 
     const resultDisplay = ref(null)
@@ -122,10 +122,10 @@ export default {
     }
 
     const calculate = () => {
-      updateEmployerBurden()
-      const totalCost = (salary.value + employerBurden.value) * months.value
+      updateEmployerContribution()
+      const totalCost = (salary.value + employerContribution.value) * months.value
       display.value = `總人事費用：${formatNumber(totalCost)} 
-        (公式：(${formatNumber(salary.value)} + ${formatNumber(employerBurden.value)}) × ${months.value})`
+        (公式：(${formatNumber(salary.value)} + ${formatNumber(employerContribution.value)}) × ${months.value})`
       input.value = ''
       mode.value = 'salary'
     }
@@ -136,23 +136,122 @@ export default {
       input.value = ''
     }
 
-    // https://posman.nccu.edu.tw/download.php?dir=rule&filename=f68439116016d3d4d09629e1b696391b.xlsx&title=6-1.%E5%8B%9E%E5%81%A5%E4%BF%9D%E3%80%81%E5%8B%9E%E9%80%80%E6%8A%95%E4%BF%9D%E5%88%86%E7%B4%9A%E8%A1%A8%EF%BC%88114.1.1%E8%B5%B7%E9%81%A9%E7%94%A8%EF%BC%89.xlsx
-    const openEmployerBurdenTable = () => {
-      alert('打開雇主負擔表格編輯界面 (提供新增/刪除/修改/保存功能)')
-    }
+    //   
+    const openEmployerContributionTable = async () => {
+      alert('打開雇主負擔表格編輯界面 (提供新增/刪除/修改/保存功能)');
 
-    const loadBurdenData = () => {
-      burdenData.value = [
-        { min: 0, max: 3000, percentage: 0.1 },
-        { min: 3001, max: 6000, percentage: 0.15 }
-      ]
-    }
+      try {
+        // Fetch the XLSX file from the Vue public folder
+        const response = await fetch('/contribution.xlsx');
 
-    const updateEmployerBurden = () => {
-      if (!burdenData.value.length || !salary.value) return
-      const item = burdenData.value.find((d) => salary.value >= d.min && salary.value <= d.max)
-      employerBurden.value = item ? item.percentage * salary.value : 0
-    }
+        if (!response.ok) {
+          throw new Error('Failed to fetch the XLSX file.');
+        }
+
+        // Read the file as a Blob
+        const fileBlob = await response.blob();
+
+        // Read the Blob content as ArrayBuffer
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const data = new Uint8Array(e.target.result);
+
+          // Parse the workbook using XLSX library
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          // Extract the first sheet's data
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+          console.log('Sheet Data:', jsonData);
+
+          // Provide an interface to edit and save the data
+          editTable(jsonData, workbook, sheetName);
+        };
+
+        reader.readAsArrayBuffer(fileBlob);
+      } catch (error) {
+        console.error('Error:', error);
+        alert('無法載入文件。請檢查文件是否存在於 public 資料夾中。');
+      }
+    };
+
+    const editTable = (data, workbook, sheetName) => {
+      // Create a simple editable table dynamically
+      const container = document.createElement('div');
+      const table = document.createElement('table');
+      const saveButton = document.createElement('button');
+
+      // Generate table headers
+      const headers = Object.keys(data[0] || {});
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+
+      headers.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Generate table body
+      const tbody = document.createElement('tbody');
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        headers.forEach(header => {
+          const td = document.createElement('td');
+          td.contentEditable = 'true';
+          td.textContent = row[header] || '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+
+      // Save button functionality
+      saveButton.textContent = '保存';
+      saveButton.onclick = () => {
+        const updatedData = [];
+        Array.from(tbody.children).forEach(row => {
+          const rowData = {};
+          Array.from(row.children).forEach((cell, index) => {
+            rowData[headers[index]] = cell.textContent;
+          });
+          updatedData.push(rowData);
+        });
+
+        // Convert updated data back to XLSX and download
+        const newSheet = XLSX.utils.json_to_sheet(updatedData);
+        workbook.Sheets[sheetName] = newSheet;
+        const newWorkbookBlob = XLSX.write(workbook, { bookType: 'xlsx', type: 'blob' });
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(newWorkbookBlob);
+        link.download = 'updated_employer_contributions.xlsx';
+        link.click();
+      };
+
+      container.appendChild(table);
+      container.appendChild(saveButton);
+      document.body.appendChild(container);
+    };
+
+
+
+    // const loadContributionData = () => {
+    //   ContributionData.value = [
+    //     { min: 0, max: 3000, percentage: 0.1 },
+    //     { min: 3001, max: 6000, percentage: 0.15 }
+    //   ]
+    // }
+
+    // const updateEmployerContribution = () => {
+    //   if (!ContributionData.value.length || !salary.value) return
+    //   const item = ContributionData.value.find((d) => salary.value >= d.min && salary.value <= d.max)
+    //   employerContribution.value = item ? item.percentage * salary.value : 0
+    // }
 
     const scrollToEnd = () => {
       nextTick(() => {
@@ -187,7 +286,7 @@ export default {
 
     onMounted(() => {
       window.addEventListener('keydown', handleKeyboardInput)
-      loadBurdenData()
+      loadContributionData()
     })
 
     onUnmounted(() => {
@@ -199,9 +298,9 @@ export default {
       mode,
       salary,
       months,
-      employerBurden,
+      employerContribution,
       display,
-      burdenData,
+      ContributionData,
       error,
       keys,
       resultDisplay,
@@ -210,7 +309,7 @@ export default {
       clearInput,
       deleteLast,
       calculate,
-      openEmployerBurdenTable
+      openEmployerContributionTable
     }
   }
 }
