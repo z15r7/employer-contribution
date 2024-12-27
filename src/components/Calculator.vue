@@ -88,10 +88,10 @@ export default {
             calculate()
           } else if (mode.value === 'months') {
             const inputValue = parseInt(input.value)
-            if (isNaN(inputValue) || inputValue < 1 || inputValue > 12) {
-              showError('無效的月份輸入')
-              return
-            }
+            // if (isNaN(inputValue) || inputValue < 1 || inputValue > 12) {
+            //   showError('無效的月份輸入')
+            //   return
+            // }
             months.value = inputValue
             calculate()
           }
@@ -100,6 +100,15 @@ export default {
           clearInput()
           break
         default:
+          console.log(value, input.value + value)
+          if (mode.value === 'months') {
+            const inputValue = parseInt(input.value + value)
+            if (isNaN(inputValue) || inputValue < 1 || inputValue > 12) {
+              input.value = value
+              display.value = formatNumber(input.value)
+              return
+            }
+          }
           input.value += value
           display.value = formatNumber(input.value)
           scrollToEnd()
