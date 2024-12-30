@@ -3,5 +3,6 @@ import './style.css'
 import App from './App.vue'
 import VueExcelEditor from 'vue3-excel-editor'
 
-createApp(App).mount('#app')
+const app = createApp(App)
 app.use(VueExcelEditor)
+app.mount('#app')

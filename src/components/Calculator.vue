@@ -100,7 +100,7 @@ export default {
           clearInput()
           break
         default:
-          console.log(value, input.value + value)
+          // console.log(value, input.value + value)
           if (mode.value === 'months') {
             const inputValue = parseInt(input.value + value)
             if (isNaN(inputValue) || inputValue < 1 || inputValue > 12) {
@@ -173,7 +173,7 @@ export default {
           const sheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(sheet);
 
-          console.log('Sheet Data:', jsonData);
+          // console.log('Sheet Data:', jsonData);
 
           // Provide an interface to edit and save the data
           editTable(jsonData, workbook, sheetName);
@@ -249,18 +249,18 @@ export default {
 
 
 
-    // const loadContributionData = () => {
-    //   ContributionData.value = [
-    //     { min: 0, max: 3000, percentage: 0.1 },
-    //     { min: 3001, max: 6000, percentage: 0.15 }
-    //   ]
-    // }
+    const loadContributionData = () => {
+      ContributionData.value = [
+        { min: 0, max: 3000, percentage: 0.1 },
+        { min: 3001, max: 6000, percentage: 0.15 }
+      ]
+    }
 
-    // const updateEmployerContribution = () => {
-    //   if (!ContributionData.value.length || !salary.value) return
-    //   const item = ContributionData.value.find((d) => salary.value >= d.min && salary.value <= d.max)
-    //   employerContribution.value = item ? item.percentage * salary.value : 0
-    // }
+    const updateEmployerContribution = () => {
+      if (!ContributionData.value.length || !salary.value) return
+      const item = ContributionData.value.find((d) => salary.value >= d.min && salary.value <= d.max)
+      employerContribution.value = item ? item.percentage * salary.value : 0
+    }
 
     const scrollToEnd = () => {
       nextTick(() => {

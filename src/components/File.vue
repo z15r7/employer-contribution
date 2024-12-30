@@ -1,55 +1,96 @@
 <template>
-    <v-row>
-        <v-col cols="8">
-            <template>
-                <v-file-input accept=".xlsx" label="File input(xlsx)" outlined v-model="selectXlsx" show-size>
-                </v-file-input>
-            </template>
-        </v-col>
-
-        <v-col cols="4">
-            <v-btn color="primary" @click="uploadXlsx" class="mt-3">
-                Upload
-            </v-btn>
-        </v-col>
-    </v-row>
+    <pre>
+        {{ JSON.stringify(tableData, null, 4) }}
+    </pre>
+    <!-- <vue-excel-editor v-model="tableData">
+        <vue-excel-column v-for="(column, index) in headers" :key="index" :field="column.value" :label="column.text"
+            :type="column.type" :width="column.width" />
+    </vue-excel-editor> -->
 </template>
 
 <script>
-import XLSX from "xlsx";
+import { ref, onMounted } from 'vue';
+import * as XLSX from 'xlsx';
 
 export default {
     name: "App",
-    data() {
-        return {
-            selectXlsx: null,
-        }
-        methods: {
-            uploadXlsx() {
-                if (!this.selectXlsx) {
-                    console.log("Please upload a xlsx file")
-                    return;
-                }
-                if (this.selectXlsx) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        /* Parse data */
-                        const bstr = e.target.result;
-                        const wb = XLSX.read(bstr, { type: "binary" });
-                        /* Get first worksheet */
-                        const wsname = wb.SheetNames[0];
-                        const ws = wb.Sheets[wsname];
-                        /* Convert array of arrays */
-                        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    setup() {
+        const tableData = ref([]);
+        const headers = ref([]);
 
-                        console.log(data);
-                    };
+        const loadXlsx = async () => {
+            try {
+                const response = await fetch('/contribution.xlsx');
 
-                    reader.readAsBinaryString(this.selectXlsx);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch the XLSX file.');
                 }
-                this.selectXlsx = null;
-            },
-        }
+
+                const fileBlob = await response.blob();
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    const csvData = XLSX.utils.sheet_to_csv(sheet);
+
+                    // console.log('Loaded Data:', csvData);
+
+                    let convertedData = csvData.replace(/"(?!.*?,)([^"]*?\r\n[^"]*?)"/g, (match, p1) => {
+                        return p1.replace(/\r\n/g, '');
+                    }).replace(/"(.*?)"/g, (match, p1) => {
+                        return p1.replace(/,/g, '[comma]');
+                    }).split('\n').map(row => row
+                        .split(',').map(cell => cell
+                            .trim()
+                            .replace(/\[comma\]/g, ',')
+                            .replace(/ /g, '')
+                            .replace(/^(\d+,\d+)$/g, (match, p1) => {
+                                return p1.replace(/,/g, '');
+                            })
+                        )
+                    );
+
+                    const startIndex = convertedData.map((row, idx) => row.filter(cell => cell.includes('級數')).length > 0 ? idx : -1).filter(idx => idx !== -1);
+                    const endIndex = convertedData.map((row, idx) => row.filter(cell => cell.includes('雇主負擔合計')).length > 0 ? idx : -1).filter(idx => idx !== -1);
+
+                    let headers = [];
+
+                    if (startIndex !== -1 && endIndex !== -1) {
+                        headers = convertedData.slice(startIndex[startIndex.length - 1], endIndex[endIndex.length - 1] + 1);
+                    }
+
+                    console.log('headers:', headers);
+
+                    let headers2 = [];
+
+                    // add all column headers to headers2
+
+                    // headers.map(row =>)
+
+
+                    if (convertedData.length > 0) {
+                        headers.value = Object.keys(convertedData[0]).map(key => ({ text: key, value: key }));
+                    }
+
+                    // tableData.value = convertedData;
+                    tableData.value = headers;
+                };
+
+                reader.readAsArrayBuffer(fileBlob);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Unable to load the file. Please check if it exists in the public folder.');
+            }
+        };
+
+        onMounted(() => {
+            loadXlsx();
+        });
+
+        return { tableData, headers, loadXlsx };
     }
-}
+};
 </script>
