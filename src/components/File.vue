@@ -54,7 +54,7 @@ export default {
                     );
 
                     const findIndexes = (data, keyword) =>
-                        data.reduce((acc, row, idx) => row.some(cell => cell.includes(keyword)) ? [...acc, idx] : acc, []);
+                        data.reduce((acc, row, idx) => row.some(cell => cell === keyword) ? [...acc, idx] : acc, []);
 
                     const [startIndex, endIndex] = [
                         findIndexes(convertedData, '級數').at(-1),
@@ -100,7 +100,7 @@ export default {
 
                     console.log(convertedData[aIndex], convertedData[bIndex]);
 
-                    const bodys = (aIndex !== undefined && bIndex !== undefined)
+                    const bodysData = (aIndex !== undefined && bIndex !== undefined)
                         ? convertedData.slice(aIndex, bIndex + 1).map((row, rIdx, headers) => {
                             let lastNonEmpty = '';
                             return row.map((cell, cIdx) => {
@@ -112,7 +112,20 @@ export default {
                             });
                         }) : {};
 
-                        
+                    const bodys = bodysData.map(row => {
+                        const buildNestedObject = (nestedHeaders, row) => {
+                            return Object.entries(nestedHeaders).reduce((acc, [key, value]) => {
+                                if (typeof value === 'object') {
+                                    acc[key] = buildNestedObject(value, row);
+                                } else {
+                                    acc[key] = row[value];
+                                }
+                                return acc;
+                            }, {});
+                        };
+
+                        return buildNestedObject(headers, row);
+                    });
 
                     console.log('headers:', headers);
                     // tableData.value = headers;
