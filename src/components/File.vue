@@ -53,22 +53,47 @@ export default {
                         )
                     );
 
-                    const startIndex = convertedData.map((row, idx) => row.filter(cell => cell.includes('級數')).length > 0 ? idx : -1).filter(idx => idx !== -1);
-                    const endIndex = convertedData.map((row, idx) => row.filter(cell => cell.includes('雇主負擔合計')).length > 0 ? idx : -1).filter(idx => idx !== -1);
+                    const findIndexes = (data, keyword) =>
+                        data.reduce((acc, row, idx) => row.some(cell => cell.includes(keyword)) ? [...acc, idx] : acc, []);
 
-                    let headers = [];
+                    const [startIndex, endIndex] = [
+                        findIndexes(convertedData, '級數').at(-1),
+                        findIndexes(convertedData, '雇主負擔合計').at(-1)
+                    ];
 
-                    if (startIndex !== -1 && endIndex !== -1) {
-                        headers = convertedData.slice(startIndex[startIndex.length - 1], endIndex[endIndex.length - 1] + 1);
-                    }
+                    const headers = (startIndex !== undefined && endIndex !== undefined)
+                        ? convertedData.slice(startIndex, endIndex + 1).map((row, rIdx, headers) => {
+                            let lastNonEmpty = '';
+                            return row.map((cell, cIdx) => {
+                                if (!cell) {
+                                    const hasNextNonEmpty = headers.slice(rIdx + 1).some(row => row[cIdx]);
+                                    return hasNextNonEmpty ? lastNonEmpty : '';
+                                }
+                                return (lastNonEmpty = cell);
+                            });
+                        }).reduce((acc, row, rIdx, allHeaders) => {
+                            row.forEach((cell, cIdx) => {
+                                if (!cell) return;
+
+                                let currentLevel = acc;
+
+                                [...Array(rIdx)].forEach((_, i) => {
+                                    const ancestorCell = allHeaders[i][cIdx];
+                                    if (!ancestorCell) return;
+
+                                    if (typeof currentLevel[ancestorCell] !== 'object') {
+                                        currentLevel[ancestorCell] = {};
+                                    }
+                                    currentLevel = currentLevel[ancestorCell];
+                                });
+
+                                currentLevel[cell] = currentLevel[cell] || cIdx;
+                            });
+                            return acc;
+                        }, {})
+                        : {};
 
                     console.log('headers:', headers);
-
-                    let headers2 = [];
-
-                    // add all column headers to headers2
-
-                    // headers.map(row =>)
 
 
                     if (convertedData.length > 0) {
