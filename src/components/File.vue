@@ -1,6 +1,6 @@
 <template>
-    <pre>
-        {{ JSON.stringify(tableData, null, 4) }}
+    <pre style="text-align: left;">
+        {{ tableData }}
     </pre>
     <!-- <vue-excel-editor v-model="tableData">
         <vue-excel-column v-for="(column, index) in headers" :key="index" :field="column.value" :label="column.text"
@@ -93,15 +93,33 @@ export default {
                         }, {})
                         : {};
 
+                    const [aIndex, bIndex] = [
+                        findIndexes(convertedData, '第1級').at(-1),
+                        findIndexes(convertedData, '第59級').at(-1)
+                    ];
+
+                    console.log(convertedData[aIndex], convertedData[bIndex]);
+
+                    const bodys = (aIndex !== undefined && bIndex !== undefined)
+                        ? convertedData.slice(aIndex, bIndex + 1).map((row, rIdx, headers) => {
+                            let lastNonEmpty = '';
+                            return row.map((cell, cIdx) => {
+                                if (!cell) {
+                                    const hasNextNonEmpty = headers.slice(rIdx + 1).some(row => row[cIdx]);
+                                    return hasNextNonEmpty ? lastNonEmpty : '';
+                                }
+                                return (lastNonEmpty = cell);
+                            });
+                        }) : {};
+
+                        
+
                     console.log('headers:', headers);
+                    // tableData.value = headers;
 
+                    console.log('bodys:', bodys);
+                    tableData.value = bodys;
 
-                    if (convertedData.length > 0) {
-                        headers.value = Object.keys(convertedData[0]).map(key => ({ text: key, value: key }));
-                    }
-
-                    // tableData.value = convertedData;
-                    tableData.value = headers;
                 };
 
                 reader.readAsArrayBuffer(fileBlob);
