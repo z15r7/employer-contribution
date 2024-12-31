@@ -30,6 +30,7 @@
               <th>月份</th>
               <th>勞保費用</th>
               <th>健保費用</th>
+              <th>勞提6%</th>
               <th>年終獎金</th>
               <th>補充保費</th>
             </tr>
@@ -40,6 +41,7 @@
               <td>{{ totalCost.months ? totalCost.months : '--' }}</td>
               <td>{{ totalCost.laborInsuranceFee ? formatNumber(totalCost.laborInsuranceFee) : '--' }}</td>
               <td>{{ totalCost.healthInsuranceFee ? formatNumber(totalCost.healthInsuranceFee) : '--' }}</td>
+              <td>{{ totalCost.laborPensionFee ? formatNumber(totalCost.laborPensionFee) : '--' }}</td>
               <td>{{ totalCost.yearEndBonus ? formatNumber(totalCost.yearEndBonus) : '--' }}</td>
               <td>{{ totalCost.healthInsuranceSupplement ? formatNumber(totalCost.healthInsuranceSupplement) : '--' }}</td>
             </tr>
@@ -173,6 +175,7 @@ export default {
         salary: salary.value,
         months: months.value,
         yearEndBonus: Math.ceil(salary.value * 1.5 * (months.value / 12)),
+        laborPensionFee: 0,
         laborInsuranceFee: 0,
         healthInsuranceFee: 0,
         healthInsuranceSupplement: 0
@@ -181,11 +184,12 @@ export default {
       totalCost.value.healthInsuranceSupplement = Math.ceil(totalCost.value.yearEndBonus * 0.0211)
 
       if (item) {
+        totalCost.value.laborPensionFee = item['勞提6%']
         totalCost.value.laborInsuranceFee = item['勞保費用']['雇主負擔']['雇主負擔合計']
         totalCost.value.healthInsuranceFee = item['健保費用']['雇主負擔']
       }
 
-      const monthlyCost = totalCost.value.laborInsuranceFee + totalCost.value.healthInsuranceFee
+      const monthlyCost = totalCost.value.laborInsuranceFee + totalCost.value.healthInsuranceFee + totalCost.value.laborPensionFee
 
       // totalEmployerContribution.value = item ? item['勞保費用']['雇主負擔']['雇主負擔合計'] + item['健保費用']['雇主負擔'] : 0
 
