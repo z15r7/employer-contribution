@@ -17,7 +17,36 @@
       </button>
     </div>
 
-    <button class="edit-button" @click="openEmployerContributionTable">編輯雇主負擔</button>
+    <!-- Display Area 2 -->
+    <div class="display-area2">
+      <div class="result" ref="resultDisplay">
+        {{ subDisplay }}
+      </div>
+      <div>
+        <table>
+          <thead>
+            <tr>
+              <th>薪資</th>
+              <th>月份</th>
+              <th>勞保費用</th>
+              <th>健保費用</th>
+              <th>年終獎金</th>
+              <th>補充保費</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{ totalCost.salary ? formatNumber(totalCost.salary) : '--' }}</td>
+              <td>{{ totalCost.months ? totalCost.months : '--' }}</td>
+              <td>{{ totalCost.laborInsuranceFee ? formatNumber(totalCost.laborInsuranceFee) : '--' }}</td>
+              <td>{{ totalCost.healthInsuranceFee ? formatNumber(totalCost.healthInsuranceFee) : '--' }}</td>
+              <td>{{ totalCost.yearEndBonus ? formatNumber(totalCost.yearEndBonus) : '--' }}</td>
+              <td>{{ totalCost.healthInsuranceSupplement ? formatNumber(totalCost.healthInsuranceSupplement) : '--' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -30,12 +59,20 @@ export default {
   setup() {
     const input = ref('')
     const mode = ref('salary')
-    const salary = ref(null)
-    const months = ref(null)
-    const employerContribution = ref(0)
+    
     const display = ref('請輸入薪資金額')
+    const subDisplay = ref('')
     const contributionData = ref([])
     const error = ref(null)
+    
+    const salary = ref(null)
+    const months = ref(null)
+    const totalCost = ref({})
+    // const yearEndBonus = ref(0)
+    // const totalEmployerContribution = ref(0)
+    // const laborInsuranceFee = ref(0)
+    // const healthInsuranceFee = ref(0)
+    // const healthInsuranceSupplement = ref(0)
 
     // const headers = ref([]);
     // const bodys = ref([]);
@@ -130,11 +167,33 @@ export default {
 
     const calculate = () => {
       if (!contributionData.value.length || !salary.value) {return}
-      const item = contributionData.value.find((d) => salary.value >= d['月薪總額-(含)以上'] && salary.value <= d['月薪總額-迄'])
-      employerContribution.value = item ? item['勞保費用']['雇主負擔']['雇主負擔合計'] + item['健保費用']['雇主負擔'] : 0
-      const totalCost = (salary.value + employerContribution.value) * months.value
-      display.value = `總人事費用：${formatNumber(totalCost)} 
-        (公式：(${formatNumber(salary.value)} + ${formatNumber(employerContribution.value)}) × ${months.value})`
+      const item = contributionData.value.find((d) => salary.value <= d['月薪總額-迄'])
+
+      totalCost.value = {
+        salary: salary.value,
+        months: months.value,
+        yearEndBonus: Math.ceil(salary.value * 1.5 * (months.value / 12)),
+        laborInsuranceFee: 0,
+        healthInsuranceFee: 0,
+        healthInsuranceSupplement: 0
+      }
+
+      totalCost.value.healthInsuranceSupplement = Math.ceil(totalCost.value.yearEndBonus * 0.0211)
+
+      if (item) {
+        totalCost.value.laborInsuranceFee = item['勞保費用']['雇主負擔']['雇主負擔合計']
+        totalCost.value.healthInsuranceFee = item['健保費用']['雇主負擔']
+      }
+
+      const monthlyCost = totalCost.value.laborInsuranceFee + totalCost.value.healthInsuranceFee
+
+      // totalEmployerContribution.value = item ? item['勞保費用']['雇主負擔']['雇主負擔合計'] + item['健保費用']['雇主負擔'] : 0
+
+
+      const totalCostValue = (salary.value + monthlyCost) * months.value + totalCost.value.yearEndBonus + totalCost.value.healthInsuranceSupplement
+      display.value = `${formatNumber(totalCostValue)}`
+      subDisplay.value = `
+        ${formatNumber(totalCostValue)} = (${formatNumber(salary.value)} + 雇主負擔 ${formatNumber(monthlyCost)}) × ${months.value} + 年終 ${formatNumber(totalCost.value.yearEndBonus)} + 補充保費 ${formatNumber(totalCost.value.healthInsuranceSupplement)} = ${formatNumber(totalCostValue)}`
       input.value = ''
       mode.value = 'salary'
     }
@@ -223,7 +282,7 @@ export default {
             : {};
 
           const [aIndex, bIndex] = [
-            findIndexes(convertedData, '第1級').at(-1),
+            findIndexes(convertedData, '雇主負擔合計').at(-1) + 2,
             findIndexes(convertedData, '第59級').at(-1)
           ];
 
@@ -259,7 +318,7 @@ export default {
           // console.log('headers:', headers);
           // tableData.value = headers;
 
-          // console.log('bodys:', bodys);
+          console.log('bodys:', bodys);
           contributionData.value = bodys;
 
         };
@@ -316,9 +375,10 @@ export default {
       mode,
       salary,
       months,
-      employerContribution,
       display,
-      ContributionData: contributionData,
+      subDisplay,
+      contributionData,
+      totalCost,
       error,
       keys,
       resultDisplay,
