@@ -34,8 +34,11 @@ export default {
     const months = ref(null)
     const employerContribution = ref(0)
     const display = ref('請輸入薪資金額')
-    const ContributionData = ref([])
+    const contributionData = ref([])
     const error = ref(null)
+
+    // const headers = ref([]);
+    // const bodys = ref([]);
 
     const resultDisplay = ref(null)
     const keys = [
@@ -88,10 +91,6 @@ export default {
             calculate()
           } else if (mode.value === 'months') {
             const inputValue = parseInt(input.value)
-            // if (isNaN(inputValue) || inputValue < 1 || inputValue > 12) {
-            //   showError('無效的月份輸入')
-            //   return
-            // }
             months.value = inputValue
             calculate()
           }
@@ -100,7 +99,6 @@ export default {
           clearInput()
           break
         default:
-          // console.log(value, input.value + value)
           if (mode.value === 'months') {
             const inputValue = parseInt(input.value + value)
             if (isNaN(inputValue) || inputValue < 1 || inputValue > 12) {
@@ -131,7 +129,9 @@ export default {
     }
 
     const calculate = () => {
-      updateEmployerContribution()
+      if (!contributionData.value.length || !salary.value) {return}
+      const item = contributionData.value.find((d) => salary.value >= d['月薪總額-(含)以上'] && salary.value <= d['月薪總額-迄'])
+      employerContribution.value = item ? item['勞保費用']['雇主負擔']['雇主負擔合計'] + item['健保費用']['雇主負擔'] : 0
       const totalCost = (salary.value + employerContribution.value) * months.value
       display.value = `總人事費用：${formatNumber(totalCost)} 
         (公式：(${formatNumber(salary.value)} + ${formatNumber(employerContribution.value)}) × ${months.value})`
@@ -145,122 +145,131 @@ export default {
       input.value = ''
     }
 
-    //   
-    const openEmployerContributionTable = async () => {
-      alert('打開雇主負擔表格編輯界面 (提供新增/刪除/修改/保存功能)');
-
+    const loadContributionData = async () => {
       try {
-        // Fetch the XLSX file from the Vue public folder
         const response = await fetch('/contribution.xlsx');
 
         if (!response.ok) {
           throw new Error('Failed to fetch the XLSX file.');
         }
 
-        // Read the file as a Blob
         const fileBlob = await response.blob();
 
-        // Read the Blob content as ArrayBuffer
         const reader = new FileReader();
         reader.onload = (e) => {
           const data = new Uint8Array(e.target.result);
-
-          // Parse the workbook using XLSX library
           const workbook = XLSX.read(data, { type: 'array' });
-
-          // Extract the first sheet's data
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(sheet);
+          const csvData = XLSX.utils.sheet_to_csv(sheet);
 
-          // console.log('Sheet Data:', jsonData);
+          // console.log('Loaded Data:', csvData);
 
-          // Provide an interface to edit and save the data
-          editTable(jsonData, workbook, sheetName);
+          let convertedData = csvData.replace(/"(?!.*?,)([^"]*?\r\n[^"]*?)"/g, (match, p1) => {
+            return p1.replace(/\r\n/g, '');
+          }).replace(/"(.*?)"/g, (match, p1) => {
+            return p1.replace(/,/g, '[comma]');
+          }).split('\n').map(row => row
+            .split(',').map(cell => cell
+              .trim()
+              .replace(/\[comma\]/g, ',')
+              .replace(/ /g, '')
+              .replace(/^(\d+,\d+)$/g, (match, p1) => {
+                return p1.replace(/,/g, '');
+              })
+            )
+          );
+
+          // console.log('convertedData:', convertedData);
+
+          const findIndexes = (data, keyword) =>
+            data.reduce((acc, row, idx) => row.some(cell => cell === keyword) ? [...acc, idx] : acc, []);
+
+          const [startIndex, endIndex] = [
+            findIndexes(convertedData, '級數').at(-1),
+            findIndexes(convertedData, '雇主負擔合計').at(-1)
+          ];
+
+          const headers = (startIndex !== undefined && endIndex !== undefined)
+            ? convertedData.slice(startIndex, endIndex + 1).map((row, rIdx, headers) => {
+              let lastNonEmpty = '';
+              return row.map((cell, cIdx) => {
+                if (!cell) {
+                  const hasNextNonEmpty = headers.slice(rIdx + 1).some(row => row[cIdx]);
+                  return hasNextNonEmpty ? lastNonEmpty : '';
+                }
+                return (lastNonEmpty = cell);
+              });
+            }).reduce((acc, row, rIdx, allHeaders) => {
+              row.forEach((cell, cIdx) => {
+                if (!cell) return;
+
+                let currentLevel = acc;
+
+                [...Array(rIdx)].forEach((_, i) => {
+                  const ancestorCell = allHeaders[i][cIdx];
+                  if (!ancestorCell) return;
+
+                  if (typeof currentLevel[ancestorCell] !== 'object') {
+                    currentLevel[ancestorCell] = {};
+                  }
+                  currentLevel = currentLevel[ancestorCell];
+                });
+
+                currentLevel[cell] = currentLevel[cell] || cIdx;
+              });
+              return acc;
+            }, {})
+            : {};
+
+          const [aIndex, bIndex] = [
+            findIndexes(convertedData, '第1級').at(-1),
+            findIndexes(convertedData, '第59級').at(-1)
+          ];
+
+          // console.log(convertedData[aIndex], convertedData[bIndex]);
+
+          const bodysData = (aIndex !== undefined && bIndex !== undefined)
+            ? convertedData.slice(aIndex, bIndex + 1).map((row, rIdx, headers) => {
+              let lastNonEmpty = '';
+              return row.map((cell, cIdx) => {
+                if (!cell) {
+                  const hasNextNonEmpty = headers.slice(rIdx + 1).some(row => row[cIdx]);
+                  return hasNextNonEmpty ? lastNonEmpty : '';
+                }
+                return (lastNonEmpty = (!isNaN(cell) ? parseInt(cell) : cell));
+              });
+            }) : {};
+
+          const bodys = bodysData.map(row => {
+            const buildNestedObject = (nestedHeaders, row) => {
+              return Object.entries(nestedHeaders).reduce((acc, [key, value]) => {
+                if (typeof value === 'object') {
+                  acc[key] = buildNestedObject(value, row);
+                } else {
+                  acc[key] = row[value];
+                }
+                return acc;
+              }, {});
+            };
+
+            return buildNestedObject(headers, row);
+          });
+
+          // console.log('headers:', headers);
+          // tableData.value = headers;
+
+          // console.log('bodys:', bodys);
+          contributionData.value = bodys;
+
         };
 
         reader.readAsArrayBuffer(fileBlob);
       } catch (error) {
         console.error('Error:', error);
-        alert('無法載入文件。請檢查文件是否存在於 public 資料夾中。');
+        alert('Unable to load the file. Please check if it exists in the public folder.');
       }
     };
-
-    const editTable = (data, workbook, sheetName) => {
-      // Create a simple editable table dynamically
-      const container = document.createElement('div');
-      const table = document.createElement('table');
-      const saveButton = document.createElement('button');
-
-      // Generate table headers
-      const headers = Object.keys(data[0] || {});
-      const thead = document.createElement('thead');
-      const headerRow = document.createElement('tr');
-
-      headers.forEach(header => {
-        const th = document.createElement('th');
-        th.textContent = header;
-        headerRow.appendChild(th);
-      });
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
-
-      // Generate table body
-      const tbody = document.createElement('tbody');
-      data.forEach(row => {
-        const tr = document.createElement('tr');
-        headers.forEach(header => {
-          const td = document.createElement('td');
-          td.contentEditable = 'true';
-          td.textContent = row[header] || '';
-          tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-
-      // Save button functionality
-      saveButton.textContent = '保存';
-      saveButton.onclick = () => {
-        const updatedData = [];
-        Array.from(tbody.children).forEach(row => {
-          const rowData = {};
-          Array.from(row.children).forEach((cell, index) => {
-            rowData[headers[index]] = cell.textContent;
-          });
-          updatedData.push(rowData);
-        });
-
-        // Convert updated data back to XLSX and download
-        const newSheet = XLSX.utils.json_to_sheet(updatedData);
-        workbook.Sheets[sheetName] = newSheet;
-        const newWorkbookBlob = XLSX.write(workbook, { bookType: 'xlsx', type: 'blob' });
-
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(newWorkbookBlob);
-        link.download = 'updated_employer_contributions.xlsx';
-        link.click();
-      };
-
-      container.appendChild(table);
-      container.appendChild(saveButton);
-      document.body.appendChild(container);
-    };
-
-
-
-    const loadContributionData = () => {
-      ContributionData.value = [
-        { min: 0, max: 3000, percentage: 0.1 },
-        { min: 3001, max: 6000, percentage: 0.15 }
-      ]
-    }
-
-    const updateEmployerContribution = () => {
-      if (!ContributionData.value.length || !salary.value) return
-      const item = ContributionData.value.find((d) => salary.value >= d.min && salary.value <= d.max)
-      employerContribution.value = item ? item.percentage * salary.value : 0
-    }
 
     const scrollToEnd = () => {
       nextTick(() => {
@@ -295,7 +304,7 @@ export default {
 
     onMounted(() => {
       window.addEventListener('keydown', handleKeyboardInput)
-      loadContributionData()
+      loadContributionData();
     })
 
     onUnmounted(() => {
@@ -309,7 +318,7 @@ export default {
       months,
       employerContribution,
       display,
-      ContributionData,
+      ContributionData: contributionData,
       error,
       keys,
       resultDisplay,
@@ -317,8 +326,7 @@ export default {
       handleInput,
       clearInput,
       deleteLast,
-      calculate,
-      openEmployerContributionTable
+      calculate
     }
   }
 }

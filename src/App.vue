@@ -1,11 +1,9 @@
 <script setup lang="ts">
-// import Calculator from './components/Calculator.vue'
-import File from './components/File.vue'
+import Calculator from './components/Calculator.vue'
 </script>
 
 <template>
-  <!-- <Calculator /> -->
-  <File />
+  <Calculator />
 </template>
 
 <style scoped>
